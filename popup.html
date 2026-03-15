@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PhishGuard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-brand">
+        <span class="header-logo" id="headerLogo">🧅</span>
+        <div class="header-text">
+          <h1 class="header-title">PhishGuard</h1>
+          <p class="header-subtitle">AI-Powered Security Shield</p>
+        </div>
+      </div>
+      <div class="header-status" id="headerStatus">
+        <div class="status-dot" id="statusDot"></div>
+        <span class="status-text" id="statusText">Initializing...</span>
+      </div>
+    </header>
+
+    <!-- Tab Navigation -->
+    <nav class="tabs">
+      <button class="tab active" id="tabWebsite" data-tab="website">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="2" y1="12" x2="22" y2="12"></line>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+        </svg>
+        Website Check
+      </button>
+      <button class="tab" id="tabText" data-tab="text">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        Text Analysis
+      </button>
+    </nav>
+
+    <!-- Website Check Panel -->
+    <div class="panel active" id="panelWebsite">
+      <!-- Current Site Info -->
+      <div class="site-info" id="siteInfo">
+        <div class="site-url" id="siteUrl">Loading...</div>
+        <div class="site-title" id="siteTitle"></div>
+      </div>
+
+      <!-- Verdict Card -->
+      <div class="verdict-card" id="verdictCard">
+        <div class="verdict-loading" id="verdictLoading">
+          <div class="spinner"></div>
+          <p>Analyzing website safety...</p>
+        </div>
+
+        <div class="verdict-result hidden" id="verdictResult">
+          <div class="verdict-icon" id="verdictIcon">🧅</div>
+          <div class="verdict-label" id="verdictLabel">UNKNOWN</div>
+          <div class="verdict-summary" id="verdictSummary">Waiting for analysis...</div>
+
+          <!-- Confidence Meter -->
+          <div class="confidence-section">
+            <div class="confidence-header">
+              <span>Confidence</span>
+              <span class="confidence-value" id="confidenceValue">0%</span>
+            </div>
+            <div class="confidence-bar">
+              <div class="confidence-fill" id="confidenceFill" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- Risk Score -->
+          <div class="risk-section">
+            <div class="risk-header">
+              <span>Risk Score</span>
+              <span class="risk-value" id="riskValue">0/100</span>
+            </div>
+            <div class="risk-bar">
+              <div class="risk-fill" id="riskFill" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Details Accordion -->
+      <div class="details-section hidden" id="detailsSection">
+        <button class="details-toggle" id="detailsToggle">
+          <span>View Details</span>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+        <div class="details-content hidden" id="detailsContent">
+          <div class="detail-item">
+            <span class="detail-label">Category</span>
+            <span class="detail-value" id="detailCategory">—</span>
+          </div>
+          <div class="reasons-list" id="reasonsList"></div>
+        </div>
+      </div>
+
+      <!-- Re-analyze Button -->
+      <button class="btn-reanalyze" id="btnReanalyze">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+        Re-analyze
+      </button>
+    </div>
+
+    <!-- Text Analysis Panel -->
+    <div class="panel" id="panelText">
+      <div class="text-input-section">
+        <label class="input-label" for="textInput">Paste email or suspicious text below:</label>
+        <textarea class="text-input" id="textInput" placeholder="Paste the email content, message, or any suspicious text here to analyze it for phishing, spam, or scam indicators..." rows="6"></textarea>
+        <button class="btn-analyze" id="btnAnalyze">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+          Analyze Text
+        </button>
+      </div>
+
+      <!-- Text Analysis Result -->
+      <div class="text-result hidden" id="textResult">
+        <div class="text-result-header">
+          <span class="text-result-icon" id="textResultIcon">🧅</span>
+          <div>
+            <div class="text-result-verdict" id="textResultVerdict">UNKNOWN</div>
+            <div class="text-result-summary" id="textResultSummary"></div>
+          </div>
+        </div>
+
+        <!-- Confidence -->
+        <div class="confidence-section">
+          <div class="confidence-header">
+            <span>Confidence</span>
+            <span class="confidence-value" id="textConfidenceValue">0%</span>
+          </div>
+          <div class="confidence-bar">
+            <div class="confidence-fill" id="textConfidenceFill" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Red Flags -->
+        <div class="red-flags hidden" id="redFlags">
+          <h3 class="flags-title">🚩 Red Flags</h3>
+          <ul class="flags-list" id="flagsList"></ul>
+        </div>
+
+        <!-- Reasons -->
+        <div class="text-reasons" id="textReasons"></div>
+
+        <!-- Recommended Action -->
+        <div class="recommended-action hidden" id="recommendedAction">
+          <h3 class="action-title">💡 Recommended Action</h3>
+          <p class="action-text" id="actionText"></p>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div class="text-loading hidden" id="textLoading">
+        <div class="spinner"></div>
+        <p>Analyzing text content...</p>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>🧅 PhishGuard v1.0</span>
+      <span class="footer-dot">•</span>
+      <span>Powered by AI</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
