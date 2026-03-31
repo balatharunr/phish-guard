@@ -39,6 +39,12 @@ document.addEventListener('DOMContentLoaded', () => {
         reasonsList: document.getElementById('reasonsList'),
         btnReanalyze: document.getElementById('btnReanalyze'),
 
+        // Feedback section
+        feedbackSection: document.getElementById('feedbackSection'),
+        btnReportSafe: document.getElementById('btnReportSafe'),
+        btnReportPhishing: document.getElementById('btnReportPhishing'),
+        feedbackNote: document.getElementById('feedbackNote'),
+
         // Text panel
         textInput: document.getElementById('textInput'),
         btnAnalyze: document.getElementById('btnAnalyze'),
@@ -55,6 +61,10 @@ document.addEventListener('DOMContentLoaded', () => {
         actionText: document.getElementById('actionText'),
         textLoading: document.getElementById('textLoading')
     };
+
+    // Store current state for feedback
+    let currentState = null;
+    let currentUrl = '';
 
     // ============================================================
     // Tab Switching
@@ -87,20 +97,32 @@ document.addEventListener('DOMContentLoaded', () => {
     // Website Analysis Display
     // ============================================================
     function displayWebsiteResult(state, url, title) {
+        // Store for feedback
+        currentState = state;
+        currentUrl = url;
+
         // Show site info
         try {
             const urlObj = new URL(url);
-            elements.siteUrl.textContent = urlObj.hostname;
+            if (state && state.isEmailAnalysis) {
+                // Email analysis — show email context
+                elements.siteUrl.textContent = '📧 ' + (state.emailSender || urlObj.hostname);
+                elements.siteTitle.textContent = state.emailSubject || 'Email Analysis';
+            } else {
+                elements.siteUrl.textContent = urlObj.hostname;
+                elements.siteTitle.textContent = title || '';
+            }
         } catch {
             elements.siteUrl.textContent = url || 'Unknown';
+            elements.siteTitle.textContent = title || '';
         }
-        elements.siteTitle.textContent = title || '';
 
         if (!state) {
             // Still loading or no result
             elements.verdictLoading.classList.remove('hidden');
             elements.verdictResult.classList.add('hidden');
             elements.detailsSection.classList.add('hidden');
+            elements.feedbackSection.classList.add('hidden');
             setHeaderStatus('analyzing', 'Analyzing...');
             return;
         }
@@ -175,6 +197,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.innerHTML = `<span class="reason-bullet">●</span><span>${escapeHtml(reason)}</span>`;
                 elements.reasonsList.appendChild(item);
             });
+        }
+
+        // Show feedback section (only if not email analysis and canOverride is true or undefined)
+        if (!state.isEmailAnalysis) {
+            elements.feedbackSection.classList.remove('hidden');
+            elements.feedbackNote.classList.add('hidden');
+            elements.feedbackNote.textContent = '';
+            elements.feedbackNote.className = 'feedback-note hidden';
+            
+            // Enable/disable buttons based on canOverride
+            const canOverride = state.canOverride !== false;
+            elements.btnReportSafe.disabled = !canOverride;
+            elements.btnReportPhishing.disabled = !canOverride;
+            
+            if (!canOverride) {
+                elements.feedbackNote.textContent = 'This is a verified result and cannot be overridden.';
+                elements.feedbackNote.classList.remove('hidden');
+            }
+        } else {
+            elements.feedbackSection.classList.add('hidden');
         }
     }
 
@@ -310,6 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.verdictLoading.classList.remove('hidden');
         elements.verdictResult.classList.add('hidden');
         elements.detailsSection.classList.add('hidden');
+        elements.feedbackSection.classList.add('hidden');
         setHeaderStatus('analyzing', 'Re-analyzing...');
         elements.headerLogo.textContent = '🧅';
 
@@ -324,6 +367,66 @@ document.addEventListener('DOMContentLoaded', () => {
             setHeaderStatus('danger', 'Error');
         }
     });
+
+    // ============================================================
+    // User Feedback Handlers
+    // ============================================================
+    async function submitFeedback(reportedVerdict) {
+        if (!currentState || !currentUrl) {
+            return;
+        }
+
+        // Check if override is allowed
+        if (currentState.canOverride === false) {
+            elements.feedbackNote.textContent = 'Cannot override verified results.';
+            elements.feedbackNote.className = 'feedback-note error';
+            elements.feedbackNote.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            const urlObj = new URL(currentUrl);
+            const hostname = urlObj.hostname;
+
+            elements.btnReportSafe.disabled = true;
+            elements.btnReportPhishing.disabled = true;
+
+            const result = await chrome.runtime.sendMessage({
+                type: 'SUBMIT_FEEDBACK',
+                hostname: hostname,
+                reportedVerdict: reportedVerdict,
+                currentVerdict: currentState.verdict,
+                tier: currentState.tier,
+                canOverride: currentState.canOverride !== false
+            });
+
+            if (result && result.success) {
+                elements.feedbackNote.textContent = `Thank you! Your feedback for ${hostname} will apply on next page load.`;
+                elements.feedbackNote.className = 'feedback-note success';
+                elements.feedbackNote.classList.remove('hidden');
+                
+                // Do NOT update the display instantly - changes apply on reload
+                elements.btnReportSafe.disabled = true;
+                elements.btnReportPhishing.disabled = true;
+            } else {
+                elements.feedbackNote.textContent = result?.error || 'Failed to save feedback.';
+                elements.feedbackNote.className = 'feedback-note error';
+                elements.feedbackNote.classList.remove('hidden');
+                elements.btnReportSafe.disabled = false;
+                elements.btnReportPhishing.disabled = false;
+            }
+        } catch (error) {
+            console.error('Feedback error:', error);
+            elements.feedbackNote.textContent = 'Error saving feedback.';
+            elements.feedbackNote.className = 'feedback-note error';
+            elements.feedbackNote.classList.remove('hidden');
+            elements.btnReportSafe.disabled = false;
+            elements.btnReportPhishing.disabled = false;
+        }
+    }
+
+    elements.btnReportSafe.addEventListener('click', () => submitFeedback('safe'));
+    elements.btnReportPhishing.addEventListener('click', () => submitFeedback('dangerous'));
 
     // ============================================================
     // Check for context menu selected text
@@ -353,6 +456,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
+    // Check if URL should be analyzed (skip browser pages/new tabs)
+    // ============================================================
+    function shouldAnalyzeURL(url) {
+        if (!url) return false;
+        const skipPatterns = [
+            'chrome://', 'chrome-extension://', 'about:', 'edge://',
+            'brave://', 'opera://', 'vivaldi://', 'moz-extension://',
+            'chrome-search://', 'devtools://', 'view-source:',
+            'chrome://newtab', 'edge://newtab', 'about:newtab',
+            'about:blank', 'about:home', 'about:privatebrowsing',
+            'chrome://new-tab-page', 'edge://new-tab-page'
+        ];
+        if (skipPatterns.some(pattern => url.startsWith(pattern))) {
+            return false;
+        }
+        try {
+            const urlObj = new URL(url);
+            if (!urlObj.hostname || urlObj.hostname === '') {
+                return false;
+            }
+        } catch (e) {
+            return false;
+        }
+        return true;
+    }
+
+    // ============================================================
+    // Display "Not Applicable" state for browser pages/new tabs
+    // ============================================================
+    function displayNotApplicable(url) {
+        elements.siteUrl.textContent = 'Browser Page';
+        elements.siteTitle.textContent = '';
+        elements.verdictLoading.classList.add('hidden');
+        elements.verdictResult.classList.remove('hidden');
+        elements.verdictIcon.textContent = '🧅';
+        elements.verdictLabel.textContent = 'N/A';
+        elements.verdictLabel.className = 'verdict-label';
+        elements.verdictSummary.textContent = 'Analysis not available for browser pages or new tabs.';
+        elements.verdictCard.className = 'verdict-card';
+        elements.headerLogo.textContent = '🧅';
+        setHeaderStatus('default', 'Not Applicable');
+        elements.confidenceValue.textContent = '-';
+        elements.confidenceFill.style.width = '0%';
+        elements.riskValue.textContent = '-';
+        elements.riskFill.style.width = '0%';
+        elements.detailsSection.classList.add('hidden');
+        elements.feedbackSection.classList.add('hidden');
+    }
+
+    // ============================================================
     // Initialize
     // ============================================================
     async function init() {
@@ -362,6 +515,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await chrome.runtime.sendMessage({ type: 'GET_TAB_STATE' });
 
             if (response) {
+                // Check if URL should NOT be analyzed (new tab, browser pages, etc.)
+                if (response.url && !shouldAnalyzeURL(response.url)) {
+                    displayNotApplicable(response.url);
+                    checkSelectedText();
+                    return;
+                }
+
                 if (response.state) {
                     displayWebsiteResult(response.state, response.url, response.title);
                 } else if (response.url) {
@@ -386,6 +546,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         } catch (e) { /* ignore */ }
                     }, 3000);
+                } else {
+                    // No URL at all - likely a new tab or browser page
+                    displayNotApplicable('');
                 }
             }
         } catch (error) {

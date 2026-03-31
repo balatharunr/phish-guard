@@ -26,6 +26,14 @@ function getIconPaths(state) {
 
 async function setIcon(tabId, state) {
     try {
+        // Verify tab still exists before setting icon
+        await chrome.tabs.get(tabId);
+    } catch (e) {
+        // Tab no longer exists — skip icon update
+        return;
+    }
+
+    try {
         await chrome.action.setIcon({
             tabId: tabId,
             path: getIconPaths(state)
@@ -42,7 +50,10 @@ async function setIcon(tabId, state) {
             title: titles[state] || 'PhishGuard'
         });
     } catch (e) {
-        console.error('PhishGuard: Error setting icon:', e);
+        // Silently ignore — tab may have been closed during the call
+        if (!e.message?.includes('No tab with id')) {
+            console.error('PhishGuard: Error setting icon:', e);
+        }
     }
 }
 
@@ -51,13 +62,33 @@ async function setIcon(tabId, state) {
 // ============================================================
 function shouldAnalyzeURL(url) {
     if (!url) return false;
-    // Skip internal browser pages and extension pages
+    // Skip internal browser pages, extension pages, and new tab pages
     const skipPatterns = [
         'chrome://', 'chrome-extension://', 'about:', 'edge://',
         'brave://', 'opera://', 'vivaldi://', 'moz-extension://',
-        'chrome-search://', 'devtools://', 'view-source:'
+        'chrome-search://', 'devtools://', 'view-source:',
+        'chrome://newtab', 'edge://newtab', 'about:newtab',
+        'about:blank', 'about:home', 'about:privatebrowsing',
+        'chrome://new-tab-page', 'edge://new-tab-page'
     ];
-    return !skipPatterns.some(pattern => url.startsWith(pattern));
+    
+    // Check if URL matches any skip pattern
+    if (skipPatterns.some(pattern => url.startsWith(pattern))) {
+        return false;
+    }
+    
+    // Also skip if it's just a new tab without a real URL
+    try {
+        const urlObj = new URL(url);
+        // Skip if no real hostname
+        if (!urlObj.hostname || urlObj.hostname === '') {
+            return false;
+        }
+    } catch (e) {
+        return false;
+    }
+    
+    return true;
 }
 
 async function analyzeCurrentTab(tabId, url) {
@@ -143,7 +174,21 @@ chrome.runtime.onInstalled.addListener(() => {
         title: '🛡️ Check with PhishGuard',
         contexts: ['selection']
     });
+    
+    // Pre-fetch OpenPhish database on install
+    if (typeof fetchOpenPhishDatabase === 'function') {
+        fetchOpenPhishDatabase().then(() => {
+            console.log('PhishGuard: OpenPhish database pre-loaded on install');
+        });
+    }
 });
+
+// Pre-fetch OpenPhish database on service worker startup
+if (typeof fetchOpenPhishDatabase === 'function') {
+    fetchOpenPhishDatabase().then(() => {
+        console.log('PhishGuard: OpenPhish database pre-loaded on startup');
+    });
+}
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (info.menuItemId === 'phishguard-check-text' && info.selectionText) {
@@ -272,6 +317,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    if (message.type === 'ANALYZE_EMAIL') {
+        // Email content from Gmail content script
+        analyzeText(message.emailContent).then(async (result) => {
+            if (result.success && result.data) {
+                // Store in tab state so popup can display it
+                try {
+                    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                    if (tabs[0]) {
+                        tabStates.set(tabs[0].id, {
+                            url: tabs[0].url,
+                            verdict: result.data.verdict,
+                            confidence: result.data.confidence,
+                            risk_score: result.data.risk_score,
+                            reasons: result.data.reasons || [],
+                            summary: result.data.summary || '',
+                            category: result.data.category || 'unknown',
+                            red_flags: result.data.red_flags || [],
+                            recommended_action: result.data.recommended_action || '',
+                            isEmailAnalysis: true,
+                            emailSubject: message.subject || '',
+                            emailSender: message.sender || '',
+                            timestamp: Date.now()
+                        });
+
+                        // Update icon based on email verdict
+                        if (result.data.verdict === 'safe') {
+                            setIcon(tabs[0].id, 'safe');
+                        } else if (result.data.verdict === 'suspicious' || result.data.verdict === 'dangerous') {
+                            setIcon(tabs[0].id, 'danger');
+                            // Notify for dangerous emails
+                            showNotification(tabs[0].url, result.data);
+                        }
+                    }
+                } catch (e) {
+                    console.error('PhishGuard: Could not update tab state for email:', e);
+                }
+            }
+            sendResponse(result);
+        });
+        return true;
+    }
+
     if (message.type === 'REANALYZE_TAB') {
         chrome.tabs.query({ active: true, currentWindow: true }).then(async (tabs) => {
             if (tabs[0] && tabs[0].url) {
@@ -291,6 +378,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'GET_SELECTED_TEXT') {
         chrome.storage.local.get(['selectedText', 'selectedTextTimestamp', 'lastTextAnalysis', 'lastTextAnalysisTimestamp'], (data) => {
             sendResponse(data);
+        });
+        return true;
+    }
+
+    if (message.type === 'SUBMIT_FEEDBACK') {
+        // User is reporting a website as safe or phishing
+        const { hostname, reportedVerdict, currentVerdict, tier } = message;
+        
+        // Don't allow overriding hardcoded safe domains, dangerous keywords, or confirmed phishing
+        const protectedTiers = ['safe_domain', 'dangerous_keyword', 'openphish_database'];
+        if (!message.canOverride || protectedTiers.includes(tier)) {
+            sendResponse({ 
+                success: false, 
+                error: 'Cannot override verified safe domains or confirmed phishing sites.' 
+            });
+            return true;
+        }
+        
+        // Save user feedback (will take effect on next page load)
+        saveUserFeedback(hostname, reportedVerdict, currentVerdict, tier).then(success => {
+            if (success) {
+                // RULE 2: Do NOT update UI instantly
+                // The feedback will take effect when the page is reloaded or opened in a new tab
+                sendResponse({ 
+                    success: true, 
+                    message: 'Feedback saved. Changes will apply on next page load.'
+                });
+            } else {
+                sendResponse({ success: false, error: 'This site cannot be overridden.' });
+            }
         });
         return true;
     }

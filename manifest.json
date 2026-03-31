@@ -12,7 +12,8 @@
     "tabs"
   ],
   "host_permissions": [
-    "https://openrouter.ai/*"
+    "https://openrouter.ai/*",
+    "https://openphish.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -37,6 +38,11 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://mail.google.com/*"],
+      "js": ["email-content.js"],
       "run_at": "document_idle"
     }
   ]
