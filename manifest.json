@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "PhishGuard — Phishing & Spam Detector",
+  "name": "PhishGuard - Phishing & Spam Detector",
   "version": "1.0.0",
   "description": "AI-powered browser extension that detects phishing websites, spam emails, and suspicious text in real-time using advanced language models.",
   "permissions": [
