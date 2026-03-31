@@ -406,7 +406,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     message: 'Feedback saved. Changes will apply on next page load.'
                 });
             } else {
-                sendResponse({ success: false, error: 'This site cannot be overridden.' });
+                sendResponse({ success: false, error: 'Thank you for the feedback' });
             }
         });
         return true;
