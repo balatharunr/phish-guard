@@ -10,6 +10,12 @@ importScripts('api.js');
 // State Management
 // ============================================================
 const tabStates = new Map(); // tabId -> { verdict, confidence, summary, ... }
+let extensionEnabled = true; // Track extension enabled state
+
+// Load enabled state on startup
+chrome.storage.local.get('extensionEnabled', (data) => {
+    extensionEnabled = data.extensionEnabled !== false; // Default to true
+});
 
 // ============================================================
 // Icon Management
@@ -92,6 +98,12 @@ function shouldAnalyzeURL(url) {
 }
 
 async function analyzeCurrentTab(tabId, url) {
+    // Skip if extension is disabled
+    if (!extensionEnabled) {
+        setIcon(tabId, 'default');
+        return;
+    }
+
     if (!shouldAnalyzeURL(url)) {
         setIcon(tabId, 'default');
         return;
@@ -286,6 +298,27 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Message Handling (from popup / content scripts)
 // ============================================================
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'toggleExtension') {
+        extensionEnabled = message.enabled;
+        // Update all tab icons when disabled
+        if (!extensionEnabled) {
+            chrome.tabs.query({}, (tabs) => {
+                tabs.forEach(tab => {
+                    setIcon(tab.id, 'default');
+                });
+            });
+        } else {
+            // Re-analyze active tab when re-enabled
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0] && tabs[0].url) {
+                    analyzeCurrentTab(tabs[0].id, tabs[0].url);
+                }
+            });
+        }
+        sendResponse({ success: true });
+        return true;
+    }
+
     if (message.type === 'GET_TAB_STATE') {
         // Popup requesting current tab analysis state
         chrome.tabs.query({ active: true, currentWindow: true }).then(async (tabs) => {
