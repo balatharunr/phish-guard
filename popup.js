@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
         headerLogo: document.getElementById('headerLogo'),
         statusDot: document.getElementById('statusDot'),
         statusText: document.getElementById('statusText'),
+        extensionToggle: document.getElementById('extensionToggle'),
 
         // Tabs
         tabWebsite: document.getElementById('tabWebsite'),
@@ -65,6 +66,44 @@ document.addEventListener('DOMContentLoaded', () => {
     // Store current state for feedback
     let currentState = null;
     let currentUrl = '';
+
+    // ============================================================
+    // Extension Toggle
+    // ============================================================
+    async function loadToggleState() {
+        const { extensionEnabled = true } = await chrome.storage.local.get('extensionEnabled');
+        elements.extensionToggle.checked = extensionEnabled;
+        updateUIForToggleState(extensionEnabled);
+    }
+
+    function updateUIForToggleState(enabled) {
+        if (!enabled && elements.statusDot && elements.statusText) {
+            elements.statusDot.className = 'status-dot';
+            elements.statusText.textContent = 'Disabled';
+            elements.verdictCard.className = 'verdict-card';
+        }
+    }
+
+    function setupToggleListener() {
+        if (!elements.extensionToggle) return;
+        
+        elements.extensionToggle.addEventListener('change', async (e) => {
+            const enabled = e.target.checked;
+            await chrome.storage.local.set({ extensionEnabled: enabled });
+            
+            // Notify background script of the change
+            chrome.runtime.sendMessage({ type: 'toggleExtension', enabled });
+            
+            if (enabled) {
+                // Re-analyze current tab when enabled
+                if (elements.statusText) elements.statusText.textContent = 'Analyzing...';
+                if (elements.statusDot) elements.statusDot.className = 'status-dot analyzing';
+                init();
+            } else {
+                updateUIForToggleState(false);
+            }
+        });
+    }
 
     // ============================================================
     // Tab Switching
@@ -571,5 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Start
+    setupToggleListener();
+    loadToggleState();
     init();
 });
