@@ -351,6 +351,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === 'ANALYZE_EMAIL') {
+        // Check if extension is enabled before analyzing
+        if (!extensionEnabled) {
+            sendResponse({ success: false, error: 'Extension is disabled' });
+            return true;
+        }
+        
         // Email content from Gmail content script
         analyzeText(message.emailContent).then(async (result) => {
             if (result.success && result.data) {
