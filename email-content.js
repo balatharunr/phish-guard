@@ -274,6 +274,10 @@
     // Email Analysis Logic
     // ============================================================
     async function analyzeEmail() {
+        // Check if extension is enabled
+        const { extensionEnabled = true } = await chrome.storage.local.get('extensionEnabled');
+        if (!extensionEnabled) return;
+
         const body = getEmailBody();
         const subject = getEmailSubject();
         const sender = getEmailSender();
