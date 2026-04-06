@@ -268,6 +268,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Text Analysis
     // ============================================================
     elements.btnAnalyze.addEventListener('click', async () => {
+        // Check if extension is enabled
+        const { extensionEnabled = true } = await chrome.storage.local.get('extensionEnabled');
+        if (!extensionEnabled) {
+            displayTextResult({
+                verdict: 'unknown',
+                confidence: 0,
+                summary: 'Extension is currently disabled. Enable it to analyze text.',
+                reasons: [],
+                red_flags: [],
+                recommended_action: 'Toggle the extension on to use text analysis.'
+            });
+            return;
+        }
+        
         const text = elements.textInput.value.trim();
         if (!text) {
             elements.textInput.focus();
@@ -388,6 +402,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Re-analyze
     // ============================================================
     elements.btnReanalyze.addEventListener('click', async () => {
+        // Check if extension is enabled
+        const { extensionEnabled = true } = await chrome.storage.local.get('extensionEnabled');
+        if (!extensionEnabled) {
+            setHeaderStatus('danger', 'Extension Disabled');
+            return;
+        }
+        
         elements.verdictLoading.classList.remove('hidden');
         elements.verdictResult.classList.add('hidden');
         elements.detailsSection.classList.add('hidden');
@@ -397,6 +418,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const result = await chrome.runtime.sendMessage({ type: 'REANALYZE_TAB' });
+            if (result && result.error) {
+                setHeaderStatus('danger', result.error);
+                return;
+            }
             if (result && result.state) {
                 const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
                 displayWebsiteResult(result.state, tabs[0]?.url || '', tabs[0]?.title || '');
