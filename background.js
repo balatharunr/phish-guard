@@ -337,6 +337,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === 'ANALYZE_URL') {
+        // Check if extension is enabled before analyzing
+        if (!extensionEnabled) {
+            sendResponse({ success: false, error: 'Extension is disabled' });
+            return true;
+        }
+        
         analyzeURL(message.url).then(result => {
             sendResponse(result);
         });
@@ -344,6 +350,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === 'ANALYZE_TEXT') {
+        // Check if extension is enabled before analyzing
+        if (!extensionEnabled) {
+            sendResponse({ success: false, error: 'Extension is disabled' });
+            return true;
+        }
+        
         analyzeText(message.text).then(result => {
             sendResponse(result);
         });
@@ -399,6 +411,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === 'REANALYZE_TAB') {
+        // Check if extension is enabled before re-analyzing
+        if (!extensionEnabled) {
+            sendResponse({ success: false, error: 'Extension is disabled' });
+            return true;
+        }
+        
         chrome.tabs.query({ active: true, currentWindow: true }).then(async (tabs) => {
             if (tabs[0] && tabs[0].url) {
                 // Clear cached state
