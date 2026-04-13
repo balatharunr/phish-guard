@@ -444,7 +444,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const { hostname, reportedVerdict, currentVerdict, tier } = message;
         
         // Don't allow overriding hardcoded safe domains, dangerous keywords, or confirmed phishing
-        const protectedTiers = ['safe_domain', 'dangerous_keyword', 'openphish_database'];
+        const protectedTiers = ['hardcoded_malicious', 'safe_domain', 'dangerous_keyword', 'openphish_database'];
         if (!message.canOverride || protectedTiers.includes(tier)) {
             sendResponse({ 
                 success: false, 
